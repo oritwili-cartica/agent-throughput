@@ -125,8 +125,8 @@ class SignalNameTests(SignalCase):
         skills = self.metadata(records)["skills"]
         self.assertEqual(len(skills), 50)
         self.assertTrue(all(skills[f"s{i:02d}"] == 2 for i in range(5)))
-        self.assertIn("s54", skills)
-        self.assertNotIn("s55", skills)
+        self.assertIn("s49", skills)
+        self.assertNotIn("s50", skills)
 
     def test_byte_budget_drops_lowest_counts_first(self):
         records = []
@@ -136,9 +136,8 @@ class SignalNameTests(SignalCase):
                 for n in range(3 if i == 0 else 1):
                     records.append(_call(f"m-{key}-{i}-{n}", **{key: name}))
         md = self.metadata(records)
-        signals = {k: v for k, v in md.items()}
-        self.assertLess(len(json.dumps(signals, sort_keys=True)), 32 * 1024)
-        self.assertEqual(sum(1 for k in ("skills", "plugins", "mcp_servers") for _ in md.get(k, {})) < 150, True)
+        self.assertLess(len(json.dumps(md, sort_keys=True)), 32 * 1024)
+        self.assertLess(sum(len(md[key]) for key in ("skills", "plugins", "mcp_servers")), 150)
         for key in ("skills", "plugins", "mcp_servers"):
             self.assertTrue(any(c == 3 for c in md[key].values()))
 

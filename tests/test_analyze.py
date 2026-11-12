@@ -184,7 +184,7 @@ class MigrationTests(unittest.TestCase):
         conn.execute("INSERT INTO ingest_files VALUES ('/x', 'claude_code', 1, 1, 1, 0, 'ok', NULL, 'now')")
         conn.commit()
         self.assertEqual(schema.migrate(conn), 5)
-        self.assertEqual(schema.SCHEMA_VERSION, 6)
+        self.assertEqual(schema.SCHEMA_VERSION, 7)
         row = conn.execute("SELECT source_session_id, agent_type FROM sessions").fetchone()
         self.assertEqual((row["source_session_id"], row["agent_type"]), ("s1:agent-a", None))
         self.assertEqual(conn.execute("SELECT COUNT(*) FROM ingest_files").fetchone()[0], 0)  # re-read to fill it

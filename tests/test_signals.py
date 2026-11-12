@@ -179,5 +179,48 @@ class SignalPrivacyTests(SignalCase):
                     self.assertNotIn(b"SENTINEL", fh.read())
 
 
+class SchemaSevenTest(SignalCase):
+    def v6_db(self, version=6):
+        conn = schema.connect(os.path.join(self.tmp, f"v{version}.sqlite3"))
+        conn.executescript(schema._TABLES)
+        conn.execute(f"PRAGMA user_version = {version}")
+        conn.execute("INSERT INTO sessions (engine, source_session_id, is_subagent, ingested_at) VALUES ('claude_code', 's1', 0, 'now')")
+        conn.execute("INSERT INTO ingest_files VALUES ('/x', 'claude_code', 1, 1, 1, 0, 'ok', NULL, 'now')")
+        conn.commit()
+        self.addCleanup(conn.close)
+        return conn
+
+    def test_v6_migrates_to_v7_and_forgets_files(self):
+        conn = self.v6_db()
+        self.assertEqual(schema.migrate(conn), 6)
+        self.assertEqual(schema.SCHEMA_VERSION, 7)
+        self.assertEqual(conn.execute("PRAGMA user_version").fetchone()[0], 7)
+        self.assertEqual(conn.execute("SELECT COUNT(*) FROM ingest_files").fetchone()[0], 0)
+        self.assertEqual(conn.execute("SELECT COUNT(*) FROM sessions").fetchone()[0], 1)
+
+    def test_reingest_after_migration_fills_signals(self):
+        _write(self.path, [_call("m1", attributionSkill="caveman")])
+        conn = self.v6_db()
+        conn.execute("DELETE FROM sessions")
+        conn.commit()
+        schema.migrate(conn)
+        ingest.ingest(conn, {"claude_code": os.path.join(self.tmp, "claude", "projects"),
+                             "codex": os.path.join(self.tmp, "none-codex"),
+                             "kimi": os.path.join(self.tmp, "none-kimi")})
+        stored = json.loads(conn.execute("SELECT raw_metadata_json FROM sessions").fetchone()[0])
+        self.assertEqual(stored["signals_version"], 1)
+        self.assertEqual(stored["skills"], {"caveman": 1})
+
+    def test_newer_db_is_refused(self):
+        conn = self.v6_db(version=8)
+        with self.assertRaisesRegex(RuntimeError, "newer than this code"):
+            schema.migrate(conn)
+
+    def test_v7_db_keeps_ingest_files(self):
+        conn = self.v6_db(version=7)
+        self.assertEqual(schema.migrate(conn), 7)
+        self.assertEqual(conn.execute("SELECT COUNT(*) FROM ingest_files").fetchone()[0], 1)
+
+
 if __name__ == "__main__":
     unittest.main()

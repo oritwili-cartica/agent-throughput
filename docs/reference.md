@@ -109,6 +109,8 @@ sessions, other engines, and sub-agents whose launching call has no type. Only t
 string is stored, never the prompt or description. Migrating v4 or v5 forgets
 `ingest_files` too, so the next `ingest` fills the column.
 
+Schema v7 adds no column. Claude Code sessions now carry `signals_version`, `skills`, `plugins`, `mcp_servers` and `output_styles` in `raw_metadata_json` (names and call counts only; a Skill call's `input.args` is never read). Upgrading from v6 forgets `ingest_files`, so the next ingest re-reads the transcripts still on disk.
+
 `price_rates`, `subscription_plans`, `ingest_files`, `meta`, and the views
 `event_costs`, `session_costs`, `cost_by_day`, `cost_by_month`,
 `cost_by_engine_model`.

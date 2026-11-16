@@ -32,6 +32,7 @@ import os
 from typing import Dict, Iterator, Optional, Tuple
 
 from .. import actions
+from ..signals import SessionSignalCollector
 from ..types import ParsedSession, SourceFile, UsageEvent
 from .common import as_int, iter_json_lines, norm_ts, ts_min_max
 
@@ -189,6 +190,7 @@ def parse(sf: SourceFile) -> list:
     span = (None, None)
     cwds = set()
     cost_state = None
+    signals = SessionSignalCollector()
     synthetic_with_tokens = 0
     turn = 0
     made = {}  # event index -> labels of the tool uses that response made
@@ -219,6 +221,7 @@ def parse(sf: SourceFile) -> list:
             usage = msg.get("usage")
             mid = msg.get("id")
             labels = _tool_use_labels(content)
+            signals.observe_assistant(rec, content, mid or uuid or f"line:{lineno}")
             if mid in by_mid and labels and uuid not in made_lines[by_mid[mid]]:
                 made[by_mid[mid]].extend(labels)
                 made_lines[by_mid[mid]].add(uuid)
@@ -265,6 +268,8 @@ def parse(sf: SourceFile) -> list:
             ps.compaction_count += 1
         elif rtype == "cost-state":
             cost_state = rec
+        elif rtype == "attachment":
+            signals.observe_attachment(rec, rec.get("uuid") or f"line:{lineno}")
     for i in range(1, len(ps.events)):
         if ps.events[i].turn_index == ps.events[i - 1].turn_index:
             ps.events[i].action = actions.combine(made.get(i - 1, []))
@@ -273,6 +278,7 @@ def parse(sf: SourceFile) -> list:
         ps.metadata["cost_state"] = {
             k: cost_state.get(k) for k in ("totalCostUSD", "modelUsage", "startTime")
         }
+    ps.metadata.update(signals.metadata())
     if len(cwds) > 1:
         ps.metadata["cwd_count"] = len(cwds)
     if synthetic_with_tokens:
